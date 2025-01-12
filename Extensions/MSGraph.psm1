@@ -52,6 +52,28 @@ function Invoke-InitializeModule
             Value = "update"
         }
     )
+    $script:lstLoadOptions = @(
+        [PSCustomObject]@{
+            Name = "10"
+            Value = "10"
+        },
+        [PSCustomObject]@{
+            Name = "20"
+            Value = "20"
+        },
+        [PSCustomObject]@{
+            Name = "50"
+            Value = "50"
+        },
+        [PSCustomObject]@{
+            Name = "100"
+            Value = "100"
+        },
+        [PSCustomObject]@{
+            Name = "All"
+            Value = "All"
+        }
+    )
 
     # Make sure MS Graph settings are added before exiting before App Id and Tenant Id is missing
     Write-Log "Add settings and menu items"
@@ -229,6 +251,15 @@ function Invoke-InitializeModule
         Type = "Boolean"
         DefaultValue = $false
         Description = "Expand assignments when listing objects. This can be used in custom columns based on assignment info"
+    }) "GraphGeneral"
+
+    Add-SettingsObject (New-Object PSObject -Property @{
+        Title = "Load options"
+        Key = "LoadOptions"
+        Type = "List"
+        ItemsSource = $script:lstLoadOptions
+        DefaultValue = "20"
+        Description = "How many items load at a time"
     }) "GraphGeneral"
 
     Add-SettingsObject (New-Object PSObject -Property @{
@@ -558,7 +589,9 @@ function Get-GraphObjects
     [switch]
     $SingleObject,
     [string]
-    $filter)
+    $filter,
+    [int]
+    $pageSize = -1)
         
     $params = @{}
     if($objectType.ODataMetadata)
@@ -593,6 +626,10 @@ function Get-GraphObjects
     {
         #Use default page size or use below for a specific page size for testing
         #$params.Add("pageSize",5) #!!!
+        if ($pageSize -gt 0)
+        {
+            $params.Add("pageSize",$pageSize)
+        }        
     }
     elseif($SingleObject -ne $true -and $SinglePage -ne $true)
     {
@@ -780,7 +817,15 @@ function Show-GraphObjects
 
     $script:nextGraphPage = $null    
 
-    [array]$graphObjects = Get-GraphObjects -property $global:curObjectType.ViewProperties -objectType $global:curObjectType -SinglePage -Filter $filter
+    if ((Get-SettingValue "LoadOptions") -eq "All")
+    {
+        [array]$graphObjects = Get-GraphObjects -property $global:curObjectType.ViewProperties -objectType $global:curObjectType -AllPages -Filter $filter
+    }else
+    {
+       $pageSize = Get-SettingValue "LoadOptions"
+       $pageSize = [int]$pageSize
+       [array]$graphObjects = Get-GraphObjects -property $global:curObjectType.ViewProperties -objectType $global:curObjectType -SinglePage -pageSize $pageSize -Filter $filter
+    }
 
     $dgObjects.AutoGenerateColumns = $false
     $dgObjects.Columns.Clear()
